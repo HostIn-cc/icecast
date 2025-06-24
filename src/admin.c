@@ -668,74 +668,6 @@ static int command_manage_relay (client_t *client, int response)
     return admin_send_response(doc, client, response, "response.xsl");
 }
 
-void admin_source_listeners_dedup(source_t *source, xmlNodePtr parent)
-{
-    avl_node *client_node;
-    client_t *client;
-    struct dedup_entry {
-        char *ip;
-        char *user_agent;
-        char *session_id;
-    };
-
-    struct dedup_entry *dedup_list = NULL;
-    int dedup_count = 0;
-
-    thread_rwlock_rlock (&source->client_lock);
-    client_node = avl_get_first(source->clients);
-
-    while (client_node)
-    {
-        client = (client_t *)client_node->key;
-        client_node = avl_get_next(client_node);
-
-        const char *ip = client->connection.ip;
-        const char *ua = httpp_getvar(client->parser, "user-agent");
-        const char *sid = httpp_getvar(client->parser, "x-playback-session-id");
-
-        // Als die al bestaat in onze lijst, overslaan
-        int is_duplicate = 0;
-        for (int i = 0; i < dedup_count; i++)
-        {
-            if (sid && dedup_list[i].session_id && strcmp(sid, dedup_list[i].session_id) == 0)
-            {
-                is_duplicate = 1;
-                break;
-            }
-
-            if (!sid && strcmp(ip, dedup_list[i].ip) == 0 && ua && dedup_list[i].user_agent &&
-                strcmp(ua, dedup_list[i].user_agent) == 0)
-            {
-                is_duplicate = 1;
-                break;
-            }
-        }
-
-        if (is_duplicate)
-            continue;
-
-        // Voeg toe aan lijst
-        dedup_list = realloc(dedup_list, sizeof(struct dedup_entry) * (dedup_count + 1));
-        dedup_list[dedup_count].ip = strdup(ip);
-        dedup_list[dedup_count].user_agent = ua ? strdup(ua) : NULL;
-        dedup_list[dedup_count].session_id = sid ? strdup(sid) : NULL;
-        dedup_count++;
-
-        // Genereer XML voor deze unieke luisteraar
-        stats_listener_to_xml(client, parent);
-    }
-
-    thread_rwlock_unlock (&source->client_lock);
-
-    // Opruimen
-    for (int i = 0; i < dedup_count; i++) {
-        free(dedup_list[i].ip);
-        if (dedup_list[i].user_agent) free(dedup_list[i].user_agent);
-        if (dedup_list[i].session_id) free(dedup_list[i].session_id);
-    }
-    free(dedup_list);
-}
-
 
 /* populate within srcnode, groups of 0 or more listener tags detailing
  * information about each listener connected on the provide source.
@@ -819,7 +751,7 @@ static int command_show_listeners (client_t *client, source_t *source, int respo
         sscanf (ID_str, "%" SCNu64, &id);
 
     if (id == -1)
-        admin_source_listeners_dedup (source, srcnode);
+        admin_source_listeners (source, srcnode);
     else
     {
         client_t *listener = source_find_client (source, id);
