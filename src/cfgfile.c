@@ -1625,7 +1625,7 @@ mount_proxy *config_lock_mount (ice_config_t *_c, const char *mount)
 }
 
 
-void config_xml_parse_failure (void *user, xmlError *error)
+void config_xml_parse_failure (void *user, const xmlError *error)
 {
    if (error->file)
        log_parse_failure (user, "%s %s", error->file, error->message);

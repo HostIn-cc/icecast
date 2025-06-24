@@ -360,7 +360,7 @@ void config_clear_mount (mount_proxy *mountinfo, int log);
 int config_mount_ref (mount_proxy *mountinfo, int inc);
 mount_proxy *config_lock_mount (ice_config_t *config, const char *mount);
 mount_proxy *config_find_mount (ice_config_t *config, const char *mount);
-void config_xml_parse_failure (void*x,  xmlError *error);
+void config_xml_parse_failure (void*x,  const xmlError *error);
 int config_qsizing_conv_a2n (const char *str, uint32_t *p);
 
 int config_rehash(void);
