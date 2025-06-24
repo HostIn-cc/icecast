@@ -402,18 +402,18 @@ static stats_node_t *_find_node(const avl_tree *stats_tree, const char *name)
 
     /* get the root node */
     node = stats_tree->root->right;
-    
+
     while (node) {
         stats = (stats_node_t *)node->key;
         cmp = strcmp(name, stats->name);
-        if (cmp < 0) 
+        if (cmp < 0)
             node = node->left;
         else if (cmp > 0)
             node = node->right;
         else
             return stats;
     }
-    
+
     /* didn't find it */
     return NULL;
 }
@@ -1101,7 +1101,7 @@ static void stats_client_release (client_t *client)
     if (match)
         *trail = match->next;
     else
-        WARN0 ("odd, no stats client details in collection"); 
+        WARN0 ("odd, no stats client details in collection");
     thread_mutex_unlock (&_stats.listeners_lock);
 
     clear_stats_queue (client);
@@ -1220,7 +1220,7 @@ static int _free_stats(void *key)
     free(node->value);
     free(node->name);
     free(node);
-    
+
     return 1;
 }
 
@@ -1450,7 +1450,7 @@ void stats_flush (stats_handle_t handle)
 }
 
 
-// assume source stats are write locked 
+// assume source stats are write locked
 void stats_set (stats_handle_t handle, const char *name, const char *value)
 {
     if (handle)
@@ -1627,6 +1627,27 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
         xmlFree (str);
     }
 
+    xmlNodePtr queryNode = xmlNewChild(node, NULL, XMLSTR("QueryParameters"), NULL);
+    if (listener->parser && listener->parser->queryvars)
+    {
+        avl_node *param = avl_get_first(listener->parser->queryvars);
+        while (param)
+        {
+            http_var_t *var = (http_var_t *)param->key;
+            if (var && var->name && var->value)
+            {
+                // Zorg dat het XML-veilig is
+                if (xmlCheckUTF8((const unsigned char *)var->value))
+                {
+                    xmlChar *val = xmlEncodeEntitiesReentrant(parent->doc, XMLSTR(var->value));
+                    xmlNewChild(queryNode, NULL, XMLSTR(var->name), val);
+                    xmlFree(val);
+                }
+            }
+            param = avl_get_next(param);
+        }
+    }
+
     if ((listener->flags & (CLIENT_ACTIVE|CLIENT_IN_FSERVE)) == CLIENT_ACTIVE)
     {
         source_t *source = listener->shared_data;
@@ -1649,4 +1670,3 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
         xmlFree (str);
     }
 }
-
