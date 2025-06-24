@@ -1618,6 +1618,10 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
         xmlNewChild (node, NULL, XMLSTR("UserAgent"), str);
         xmlFree (str);
     }
+    else
+    {
+        xmlNewChild (node, NULL, XMLSTR("UserAgent"));
+    }
 
     header = httpp_getvar (listener->parser, "referer");
     if (header && xmlCheckUTF8((unsigned char *)header))
@@ -1625,6 +1629,10 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
         xmlChar *str = xmlEncodeEntitiesReentrant (parent->doc, XMLSTR(header));
         xmlNewChild (node, NULL, XMLSTR("Referer"), str);
         xmlFree (str);
+    }
+    else
+    {
+        xmlNewChild (node, NULL, XMLSTR("Referer"));
     }
 
     xmlNodePtr queryNode = xmlNewChild(node, NULL, XMLSTR("QueryParameters"), NULL);
