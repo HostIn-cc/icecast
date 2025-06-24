@@ -1681,7 +1681,8 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
                 if (xmlCheckUTF8((const unsigned char *)var->value))
                 {
                     xmlChar *val = xmlEncodeEntitiesReentrant(parent->doc, XMLSTR(var->value));
-                    xmlNewChild(headersNode, NULL, XMLSTR(var->name), val);
+                    xmlNodePtr headerNode = xmlNewChild(headersNode, NULL, XMLSTR("Header"), val);
+                    xmlSetProp(headerNode, XMLSTR("name"), XMLSTR(var->name));
                     xmlFree(val);
                 }
             }
