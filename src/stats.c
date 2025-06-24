@@ -1620,7 +1620,7 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
     }
     else
     {
-        xmlNewChild (node, NULL, XMLSTR("UserAgent"));
+        xmlNewChild (node, NULL, XMLSTR("UserAgent"), XMLSTR(""));
     }
 
     header = httpp_getvar (listener->parser, "referer");
@@ -1632,7 +1632,7 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
     }
     else
     {
-        xmlNewChild (node, NULL, XMLSTR("Referer"));
+        xmlNewChild (node, NULL, XMLSTR("Referer"), XMLSTR(""));
     }
 
     xmlNodePtr queryNode = xmlNewChild(node, NULL, XMLSTR("QueryParameters"), NULL);
