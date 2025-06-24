@@ -1656,12 +1656,11 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
             http_var_t *var = (http_var_t *)param->key;
             if (var && var->name && var->value)
             {
-                // Zorg dat het XML-veilig is
                 if (xmlCheckUTF8((const unsigned char *)var->value))
                 {
                     xmlChar *val = xmlEncodeEntitiesReentrant(parent->doc, XMLSTR(var->value));
-                    xmlNewChild(queryNode, NULL, XMLSTR("Parameter"), val);
-                    xmlSetProp(queryNode, XMLSTR("name"), XMLSTR(var->name));
+                    xmlNodePtr paramNode = xmlNewChild(queryNode, NULL, XMLSTR("Parameter"), val);
+                    xmlSetProp(paramNode, XMLSTR("name"), XMLSTR(var->name));
                     xmlFree(val);
                 }
             }
