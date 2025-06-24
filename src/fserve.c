@@ -120,10 +120,6 @@ static void remove_fh_from_cache (fh_node *fh);
 
 static fh_node no_file;
 
-#define MAX_SEEN 1024
-char *seen_keys[MAX_SEEN];
-int seen_count = 0;
-
 
 void fserve_initialize(void)
 {
@@ -1352,44 +1348,11 @@ int fserve_list_clients_xml (xmlNodePtr parent, fbinfo *finfo)
     {
         client_t *listener = (client_t *)anode->key;
 
-        const char *ip = listener->connection.ip;
-        const char *ua = httpp_getvar(listener->parser, "user-agent");
-        const char *session = httpp_getvar(listener->parser, "x-playback-session-id");
-
-        if (!ua) ua = "";
-        if (!session) session = "";
-
-        // Maak key: IP|UA|Session-ID
-        char key[1024];
-        snprintf(key, sizeof(key), "%s|%s|%s", ip, ua, session);
-
-        // Check of we deze key al gezien hebben
-        int duplicate = 0;
-        for (int i = 0; i < seen_count; i++) {
-            if (strcmp(seen_keys[i], key) == 0) {
-                duplicate = 1;
-                break;
-            }
-        }
-
-        if (!duplicate) {
-            // Voeg toe aan XML
-            stats_listener_to_xml(listener, parent);
-            ret++;
-
-            // Sla key op
-            if (seen_count < MAX_SEEN) {
-                seen_keys[seen_count++] = strdup(key);
-            }
-        }
-
+        stats_listener_to_xml (listener, parent);
         ret++;
         anode = avl_get_next (anode);
     }
     thread_mutex_unlock (&fh->lock);
-    for (int i = 0; i < seen_count; i++) {
-        free(seen_keys[i]);
-    }
     return ret;
 }
 

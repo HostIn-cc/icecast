@@ -175,11 +175,11 @@ xmlDocPtr admin_build_sourcelist (const char *mount, int show_listeners)
             {
                 if (mountinfo->auth)
                 {
-                    xmlNewChild (srcnode, NULL, XMLSTR("authenticator"), 
+                    xmlNewChild (srcnode, NULL, XMLSTR("authenticator"),
                             XMLSTR(mountinfo->auth->type));
                 }
                 if (mountinfo->fallback_mount)
-                    xmlNewChild (srcnode, NULL, XMLSTR("fallback"), 
+                    xmlNewChild (srcnode, NULL, XMLSTR("fallback"),
                             XMLSTR(mountinfo->fallback_mount));
             }
             config_release_config();
@@ -192,7 +192,7 @@ xmlDocPtr admin_build_sourcelist (const char *mount, int show_listeners)
                             (unsigned long)(now - source->client->connection.con_time));
                     xmlNewChild (srcnode, NULL, XMLSTR("Connected"), XMLSTR(buf));
                 }
-                xmlNewChild (srcnode, NULL, XMLSTR("content-type"), 
+                xmlNewChild (srcnode, NULL, XMLSTR("content-type"),
                         XMLSTR(source->format->contenttype));
                 if (show_listeners)
                     admin_source_listeners (source, srcnode);
@@ -205,7 +205,7 @@ xmlDocPtr admin_build_sourcelist (const char *mount, int show_listeners)
 }
 
 
-int admin_send_response (xmlDocPtr doc, client_t *client, 
+int admin_send_response (xmlDocPtr doc, client_t *client,
         admin_response_type response, const char *xslt_template)
 {
     int ret = -1;
@@ -236,7 +236,7 @@ int admin_send_response (xmlDocPtr doc, client_t *client,
         int fullpath_xslt_template_len;
         ice_config_t *config = config_get_config();
 
-        fullpath_xslt_template_len = strlen (config->adminroot_dir) + 
+        fullpath_xslt_template_len = strlen (config->adminroot_dir) +
             strlen(xslt_template) + 2;
         fullpath_xslt_template = malloc(fullpath_xslt_template_len);
         snprintf(fullpath_xslt_template, fullpath_xslt_template_len, "%s%s%s",
@@ -480,7 +480,7 @@ static int command_require (client_t *client, const char *name, const char **var
     if (*var == NULL)
         return -1;
     return 0;
-} 
+}
 
 #define COMMAND_OPTIONAL(client,name,var) \
     (var) = httpp_get_query_param((client)->parser, (name))
@@ -489,7 +489,7 @@ int html_success (client_t *client, const char *message)
 {
     client->respcode = 200;
     snprintf (client->refbuf->data, PER_CLIENT_REFBUF_SIZE,
-            "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n" 
+            "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n"
             "<html><head><title>Admin request successful</title></head>"
             "<body><p>%s</p></body></html>", message);
     client->refbuf->len = strlen (client->refbuf->data);
@@ -668,6 +668,74 @@ static int command_manage_relay (client_t *client, int response)
     return admin_send_response(doc, client, response, "response.xsl");
 }
 
+void admin_source_listeners_dedup(source_t *source, xmlNodePtr parent)
+{
+    avl_node *client_node;
+    client_t *client;
+    struct dedup_entry {
+        char *ip;
+        char *user_agent;
+        char *session_id;
+    };
+
+    struct dedup_entry *dedup_list = NULL;
+    int dedup_count = 0;
+
+    thread_rwlock_rlock (&source->client_lock);
+    client_node = avl_get_first(source->clients);
+
+    while (client_node)
+    {
+        client = (client_t *)client_node->key;
+        client_node = avl_get_next(client_node);
+
+        const char *ip = client->connection.ip;
+        const char *ua = httpp_getvar(client->parser, "user-agent");
+        const char *sid = httpp_getvar(client->parser, "x-playback-session-id");
+
+        // Als die al bestaat in onze lijst, overslaan
+        int is_duplicate = 0;
+        for (int i = 0; i < dedup_count; i++)
+        {
+            if (sid && dedup_list[i].session_id && strcmp(sid, dedup_list[i].session_id) == 0)
+            {
+                is_duplicate = 1;
+                break;
+            }
+
+            if (!sid && strcmp(ip, dedup_list[i].ip) == 0 && ua && dedup_list[i].user_agent &&
+                strcmp(ua, dedup_list[i].user_agent) == 0)
+            {
+                is_duplicate = 1;
+                break;
+            }
+        }
+
+        if (is_duplicate)
+            continue;
+
+        // Voeg toe aan lijst
+        dedup_list = realloc(dedup_list, sizeof(struct dedup_entry) * (dedup_count + 1));
+        dedup_list[dedup_count].ip = strdup(ip);
+        dedup_list[dedup_count].user_agent = ua ? strdup(ua) : NULL;
+        dedup_list[dedup_count].session_id = sid ? strdup(sid) : NULL;
+        dedup_count++;
+
+        // Genereer XML voor deze unieke luisteraar
+        stats_listener_to_xml(client, parent);
+    }
+
+    thread_rwlock_unlock (&source->client_lock);
+
+    // Opruimen
+    for (int i = 0; i < dedup_count; i++) {
+        free(dedup_list[i].ip);
+        if (dedup_list[i].user_agent) free(dedup_list[i].user_agent);
+        if (dedup_list[i].session_id) free(dedup_list[i].session_id);
+    }
+    free(dedup_list);
+}
+
 
 /* populate within srcnode, groups of 0 or more listener tags detailing
  * information about each listener connected on the provide source.
@@ -751,7 +819,7 @@ static int command_show_listeners (client_t *client, source_t *source, int respo
         sscanf (ID_str, "%" SCNu64, &id);
 
     if (id == -1)
-        admin_source_listeners (source, srcnode);
+        admin_source_listeners_dedup (source, srcnode);
     else
     {
         client_t *listener = source_find_client (source, id);
@@ -844,7 +912,7 @@ static int command_manageauth (client_t *client, source_t *source, int response)
     mount_proxy *mountinfo = config_find_mount (config, source->mount);
 
     do
-    { 
+    {
         if (mountinfo == NULL || mountinfo->auth == NULL)
         {
             WARN1 ("manage auth request for %s but no facility available", source->mount);
@@ -1093,7 +1161,7 @@ static int command_metadata (client_t *client, source_t *source, int response)
     } while (0);
     INFO1 ("Metadata on mountpoint %s prevented", source->mount);
     thread_rwlock_unlock (&source->lock);
-    xmlNewChild(node, NULL, XMLSTR("message"), 
+    xmlNewChild(node, NULL, XMLSTR("message"),
             XMLSTR("Mountpoint will not accept this URL update"));
     xmlNewChild(node, NULL, XMLSTR("return"), XMLSTR("1"));
     return admin_send_response(doc, client, response, "response.xsl");
@@ -1233,7 +1301,7 @@ static int command_list_log (client_t *client, int response)
         int len = snprintf (http->data, 100, "%s",
                 "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n");
         http->len = len;
-        http->next = content; 
+        http->next = content;
         client->respcode = 200;
         client_set_queue (client, NULL);
         client->refbuf = http;
@@ -1324,4 +1392,3 @@ static int command_alloc(client_t *client)
     return admin_send_response (doc, client, RAW, "stats.xsl");
 }
 #endif
-
