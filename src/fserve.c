@@ -120,6 +120,10 @@ static void remove_fh_from_cache (fh_node *fh);
 
 static fh_node no_file;
 
+#define MAX_SEEN 1024
+char *seen_keys[MAX_SEEN];
+int seen_count = 0;
+
 
 void fserve_initialize(void)
 {
@@ -518,7 +522,7 @@ int fserve_client_create (client_t *httpclient, const char *path)
             if (strstr (agent, "QTS") || strstr (agent, "QuickTime"))
                 protocol = "icy";
         }
-        /* at least a couple of players (fb2k/winamp) are reported to send a 
+        /* at least a couple of players (fb2k/winamp) are reported to send a
          * host header but without the port number. So if we are missing the
          * port then lets treat it as if no host line was sent */
         if (host && strchr (host, ':') == NULL)
@@ -793,7 +797,7 @@ static int prefile_send (client_t *client)
         }
         if (refbuf->flags & WRITE_BLOCK_GENERIC)
             bytes = format_generic_write_to_client (client);
-        else 
+        else
             bytes = client->check_buffer (client);
         if (bytes < 0)
         {
@@ -823,12 +827,12 @@ static int file_send (client_t *client)
 #endif
     client->schedule_ms = worker->time_ms;
     now = worker->current_time.tv_sec;
-    /* slowdown if max bandwidth is exceeded, but allow for short-lived connections to avoid 
+    /* slowdown if max bandwidth is exceeded, but allow for short-lived connections to avoid
      * this, eg admin requests */
     if (throttle_sends > 1 && now - client->connection.con_time > 1)
     {
         client->schedule_ms += 300;
-        loop = 1; 
+        loop = 1;
     }
     while (loop && written < 48000)
     {
@@ -858,14 +862,14 @@ static int throttled_file_send (client_t *client)
     fh_node *fh = client->shared_data;
     time_t now;
     worker_t *worker = client->worker;
-    unsigned long secs; 
+    unsigned long secs;
     unsigned int  rate = 0;
     unsigned int limit = fh->finfo.limit;
 
     if (fserve_running == 0 || client->connection.error)
         return -1;
     now = worker->current_time.tv_sec;
-    secs = now - client->timer_start; 
+    secs = now - client->timer_start;
     client->schedule_ms = worker->time_ms;
     if (fh->finfo.fallback)
         return fserve_move_listener (client);
@@ -1348,11 +1352,44 @@ int fserve_list_clients_xml (xmlNodePtr parent, fbinfo *finfo)
     {
         client_t *listener = (client_t *)anode->key;
 
-        stats_listener_to_xml (listener, parent);
+        const char *ip = listener->connection.ip;
+        const char *ua = httpp_getvar(listener->parser, "user-agent");
+        const char *session = httpp_getvar(listener->parser, "x-playback-session-id");
+
+        if (!ua) ua = "";
+        if (!session) session = "";
+
+        // Maak key: IP|UA|Session-ID
+        char key[1024];
+        snprintf(key, sizeof(key), "%s|%s|%s", ip, ua, session);
+
+        // Check of we deze key al gezien hebben
+        int duplicate = 0;
+        for (int i = 0; i < seen_count; i++) {
+            if (strcmp(seen_keys[i], key) == 0) {
+                duplicate = 1;
+                break;
+            }
+        }
+
+        if (!duplicate) {
+            // Voeg toe aan XML
+            stats_listener_to_xml(listener, parent);
+            ret++;
+
+            // Sla key op
+            if (seen_count < MAX_SEEN) {
+                seen_keys[seen_count++] = strdup(key);
+            }
+        }
+
         ret++;
         anode = avl_get_next (anode);
     }
     thread_mutex_unlock (&fh->lock);
+    for (int i = 0; i < seen_count; i++) {
+        free(seen_keys[i]);
+    }
     return ret;
 }
 
@@ -1453,7 +1490,7 @@ ssize_t pread (icefile_handle f, void *data, size_t count, off_t offset)
 {
     ssize_t bytes = -1;
 
-    // we do not want another thread to modifiy handle between seek and read 
+    // we do not want another thread to modifiy handle between seek and read
     // win32 may be able to use the overlapped io struct in ReadFile
     thread_mutex_lock (&seekread_lock);
     if (lseek (f, offset, SEEK_SET) != (off_t)-1)
@@ -1566,4 +1603,3 @@ int fserve_contains (const char *name)
     avl_tree_unlock (fh_cache);
     return ret;
 }
-
