@@ -1668,6 +1668,27 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
         }
     }
 
+    // Voeg alle headers toe
+    xmlNodePtr headersNode = xmlNewChild(node, NULL, XMLSTR("Headers"), NULL);
+    if (listener->parser && listener->parser->vars)
+    {
+        avl_node *param = avl_get_first(listener->parser->vars);
+        while (param)
+        {
+            http_var_t *var = (http_var_t *)param->key;
+            if (var && var->name && var->value)
+            {
+                if (xmlCheckUTF8((const unsigned char *)var->value))
+                {
+                    xmlChar *val = xmlEncodeEntitiesReentrant(parent->doc, XMLSTR(var->value));
+                    xmlNewChild(headersNode, NULL, XMLSTR(var->name), val);
+                    xmlFree(val);
+                }
+            }
+            param = avl_get_next(param);
+        }
+    }
+
     if ((listener->flags & (CLIENT_ACTIVE|CLIENT_IN_FSERVE)) == CLIENT_ACTIVE)
     {
         source_t *source = listener->shared_data;
