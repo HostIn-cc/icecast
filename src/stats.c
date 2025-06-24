@@ -1647,6 +1647,18 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
         xmlNewChild (node, NULL, XMLSTR("Range"), XMLSTR(""));
     }
 
+    header = httpp_getvar (listener->parser, "x-playback-session-id");
+    if (header && xmlCheckUTF8((unsigned char *)header))
+    {
+        xmlChar *str = xmlEncodeEntitiesReentrant (parent->doc, XMLSTR(header));
+        xmlNewChild (node, NULL, XMLSTR("PlaybackSessionId"), str);
+        xmlFree (str);
+    }
+    else
+    {
+        xmlNewChild (node, NULL, XMLSTR("PlaybackSessionId"), XMLSTR(""));
+    }
+
     xmlNodePtr queryNode = xmlNewChild(node, NULL, XMLSTR("QueryParameters"), NULL);
     if (listener->parser && listener->parser->queryvars)
     {
@@ -1661,28 +1673,6 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
                 {
                     xmlChar *val = xmlEncodeEntitiesReentrant(parent->doc, XMLSTR(var->value));
                     xmlNewChild(queryNode, NULL, XMLSTR(var->name), val);
-                    xmlFree(val);
-                }
-            }
-            param = avl_get_next(param);
-        }
-    }
-
-    // Voeg alle headers toe
-    xmlNodePtr headersNode = xmlNewChild(node, NULL, XMLSTR("Headers"), NULL);
-    if (listener->parser && listener->parser->vars)
-    {
-        avl_node *param = avl_get_first(listener->parser->vars);
-        while (param)
-        {
-            http_var_t *var = (http_var_t *)param->key;
-            if (var && var->name && var->value)
-            {
-                if (xmlCheckUTF8((const unsigned char *)var->value))
-                {
-                    xmlChar *val = xmlEncodeEntitiesReentrant(parent->doc, XMLSTR(var->value));
-                    xmlNodePtr headerNode = xmlNewChild(headersNode, NULL, XMLSTR("Header"), val);
-                    xmlSetProp(headerNode, XMLSTR("name"), XMLSTR(var->name));
                     xmlFree(val);
                 }
             }
