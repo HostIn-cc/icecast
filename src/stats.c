@@ -1635,6 +1635,18 @@ void stats_listener_to_xml (client_t *listener, xmlNodePtr parent)
         xmlNewChild (node, NULL, XMLSTR("Referer"), XMLSTR(""));
     }
 
+    header = httpp_getvar (listener->parser, "range");
+    if (header && xmlCheckUTF8((unsigned char *)header))
+    {
+        xmlChar *str = xmlEncodeEntitiesReentrant (parent->doc, XMLSTR(header));
+        xmlNewChild (node, NULL, XMLSTR("Range"), str);
+        xmlFree (str);
+    }
+    else
+    {
+        xmlNewChild (node, NULL, XMLSTR("Range"), XMLSTR(""));
+    }
+
     xmlNodePtr queryNode = xmlNewChild(node, NULL, XMLSTR("QueryParameters"), NULL);
     if (listener->parser && listener->parser->queryvars)
     {
